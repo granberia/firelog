@@ -47,9 +47,11 @@
     "eslint": "^9.27.0",
     "globals": "^16.1.0",
     "husky": "^9.1.7",
+    "inquirer": "^12.9.6",
     "purgecss": "^7.0.2",
     "rollup": "^4.41.0",
     "semantic-release": "^24.2.4",
+    "simple-git": "^3.28.0",
     "stylelint": "^16.19.1",
     "stylelint-config-standard-scss": "^15.0.1"
   },
