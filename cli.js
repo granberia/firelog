@@ -8,6 +8,8 @@ import simpleGit from 'simple-git';
 const DRAFTS_DIR = '_drafts';
 const POSTS_DIR = '_posts';
 const TABS_DIR = '_tabs';
+const CDN_IMG_DIR = path.join('cdn', 'img');
+const URL_IMG_PREFIX = '/img';
 const CONFIG_PATH = 'config.json';
 const git = simpleGit();
 
@@ -89,8 +91,10 @@ async function createDraft() {
 
   const date = getFormattedDate();
   const slug = slugify(title);
-  const fileName = `${date}-${slug}.md`;
-  const filePath = path.join(DRAFTS_DIR, fileName);
+  const draftDirName = `${date}-${slug}`;
+  const draftDirPath = path.join(DRAFTS_DIR, draftDirName);
+  const fileName = `${draftDirName}.md`;
+  const filePath = path.join(draftDirPath, fileName);
 
   const fileContent = `---
 title: ${title}
@@ -101,9 +105,9 @@ tags: [${tags.join(', ')}]
 
 `;
 
-  if (!fs.existsSync(DRAFTS_DIR)) {
-    fs.mkdirSync(DRAFTS_DIR);
-    console.log(`📁 '${DRAFTS_DIR}' 폴더를 생성했습니다.`);
+  if (!fs.existsSync(draftDirPath)) {
+    fs.mkdirSync(draftDirPath, { recursive: true });
+    console.log(`📁 초안 폴더를 생성했습니다: ${draftDirPath}`);
   }
 
   fs.writeFileSync(filePath, fileContent);
@@ -118,45 +122,91 @@ async function publishDraft() {
     return;
   }
 
-  const draftFiles = fs
-    .readdirSync(DRAFTS_DIR)
-    .filter((file) => file.endsWith('.md'));
+  // 이제 파일이 아닌 폴더를 기준으로 초안 목록을 가져옵니다.
+  const draftDirs = fs
+    .readdirSync(DRAFTS_DIR, { withFileTypes: true })
+    .filter((dirent) => dirent.isDirectory())
+    .map((dirent) => dirent.name);
 
-  if (draftFiles.length === 0) {
-    console.log('🤷 발행할 초안 파일이 없습니다.');
+  if (draftDirs.length === 0) {
+    console.log('🤷 발행할 초안이 없습니다.');
     return;
   }
 
-  const { fileToPublish } = await inquirer.prompt([
+  const { dirToPublish } = await inquirer.prompt([
     {
       type: 'list',
-      name: 'fileToPublish',
-      message: '🚀 발행할 초안 파일을 선택하세요:',
-      choices: draftFiles
+      name: 'dirToPublish',
+      message: '🚀 발행할 초안 폴더를 선택하세요:',
+      choices: draftDirs
     }
   ]);
 
-  const sourcePath = path.join(DRAFTS_DIR, fileToPublish);
-  const destPath = path.join(POSTS_DIR, fileToPublish);
+  const sourceDraftDir = path.join(DRAFTS_DIR, dirToPublish); // 예: _drafts/2023-10-27-slug
+  const mdFileName = `${dirToPublish}.md`;
+  const sourceMdPath = path.join(sourceDraftDir, mdFileName);
 
-  if (!fs.existsSync(POSTS_DIR)) {
-    fs.mkdirSync(POSTS_DIR);
+  // 목적지 경로 설정
+  const destMdPath = path.join(POSTS_DIR, mdFileName);
+  const destCdnDir = path.join(CDN_IMG_DIR, dirToPublish);
+
+  // 1. 초안 폴더 내 파일 목록 읽기 (이미지 등)
+  const allFiles = fs.readdirSync(sourceDraftDir);
+  const assetFiles = allFiles.filter((file) => file !== mdFileName);
+
+  // 2. 마크다운 파일 내용 읽기 및 경로 변환
+  if (!fs.existsSync(sourceMdPath)) {
+    console.error(
+      `❌ 오류: 마크다운 파일(${sourceMdPath})을 찾을 수 없습니다.`
+    );
+    return;
+  }
+  const originalContent = fs.readFileSync(sourceMdPath, 'utf-8');
+
+  // 정규식: 상대 경로 이미지 링크 (![...](./...))를 찾아서 변경
+  const imagePathRegex = /!\[(.*?)\]\(\s*(\.\/|\.\.\/)?(.*?)\s*\)/g;
+  const newCdnPathPrefix = `${URL_IMG_PREFIX}/${dirToPublish}`;
+
+  const newContent = originalContent.replace(
+    imagePathRegex,
+    `![$1](${newCdnPathPrefix}/$3)`
+  );
+
+  // 3. 목적지 폴더 생성
+  if (!fs.existsSync(POSTS_DIR)) fs.mkdirSync(POSTS_DIR);
+  if (assetFiles.length > 0 && !fs.existsSync(destCdnDir)) {
+    fs.mkdirSync(destCdnDir, { recursive: true });
   }
 
-  fs.renameSync(sourcePath, destPath);
-  console.log(`✅ 파일 이동 완료: ${sourcePath} -> ${destPath}`);
+  // 4. 경로가 수정된 마크다운 파일을 _posts로 쓰기
+  fs.writeFileSync(destMdPath, newContent);
+  console.log(`✅ 마크다운 파일 발행 완료: ${destMdPath}`);
 
+  // 5. 이미지 파일들을 cdn/img 폴더로 이동
+  for (const asset of assetFiles) {
+    const sourceAssetPath = path.join(sourceDraftDir, asset);
+    const destAssetPath = path.join(destCdnDir, asset);
+    fs.renameSync(sourceAssetPath, destAssetPath);
+  }
+  if (assetFiles.length > 0) {
+    console.log(`🖼️  이미지 파일들을 이동했습니다: ${destCdnDir}`);
+  }
+
+  // 6. 작업이 완료된 원본 초안 폴더 삭제
+  fs.rmSync(sourceDraftDir, { recursive: true, force: true });
+  console.log(`🗑️  원본 초안 폴더를 삭제했습니다: ${sourceDraftDir}`);
+
+  // 7. Git 작업
   try {
     console.log('📦 Git에 변경사항을 커밋하고 푸시합니다...');
     gitConfig();
 
-    console.log(`  -> git add ${destPath}`);
-    await git.add(destPath);
+    await git.add(destMdPath); // 수정된 마크다운 파일 추가
+    if (assetFiles.length > 0) {
+      await git.add(destCdnDir); // 이미지 폴더 추가
+    }
 
-    console.log(`  -> git commit -m "chore: ${fileToPublish}"`);
-    await git.commit(`chore: ${fileToPublish}`);
-
-    console.log('  -> git push');
+    await git.commit(`feat: publish new post - ${dirToPublish}`);
     await git.push();
 
     console.log('🎉 포스트 발행이 성공적으로 완료되었습니다!');
