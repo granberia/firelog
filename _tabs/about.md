@@ -1,6 +1,6 @@
 ---
 icon: fas fa-info-circle
-order: 4
+order: 1
 ---
 
 미래를 계획하고 행복을 쫓아가는 이정표입니다.

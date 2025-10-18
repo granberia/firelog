@@ -37,6 +37,23 @@
         </li>
         <!-- .nav-item -->
       {% endfor %}
+
+      {% assign sort_categories = site.categories | sort %}
+      {% for category in sort_categories %}
+        {% assign category_name = category | first %}
+        {% capture _category_url %}/categories/{{ category_name | slugify | url_encode }}/{% endcapture %}
+
+        <li class="nav-item{% if _category_url == page.url %}{{ " active" }}{% endif %}">
+          <a href="{{ _category_url | relative_url }}" class="nav-link">
+            <i class="fa-fw fas fa-folder"></i>
+            {% capture tab_name %}{{ _category_url | split: '/' }}{% endcapture %}
+            {% assign top_posts_size = site.categories[category_name] | size %}
+
+            <span>{{ category_name | upcase }} ({{ top_posts_size }})</span>
+          </a>
+        </li>
+        {% assign group_index = group_index | plus: 1 %}
+      {% endfor %}
     </ul>
   </nav>
 
