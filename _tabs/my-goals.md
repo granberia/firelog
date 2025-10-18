@@ -16,7 +16,9 @@
     - [https://yanghs6.github.io/posts/3015_chirpy_custom_sidebar/](https://yanghs6.github.io/posts/3015_chirpy_custom_sidebar/)
   - [ ] 글 목록에서 첨부된 이미지 미리보기 기능 추가
     - 포스트에 이미지를 편리하게 넣는 기능을 만들고 테스트해보니 글 목록에 이미지 미리보기 같은 게 있으면 좋겠다는 생각이 들었다. 앞으로 커미션 짤 같은 것도 블로그에 자주 올릴 테니까...
-    - 블로그 테마 중에 비슷한 기능을 지원하는 테마를 찾아보자. 
+    - Chirpy에서 이 기능을 이미 지원하는데 왜 작동하지 않았지? 원인을 찾아보니 image라는 값을 따로 지정해줘야 했다.
+    - [https://github.com/cotes2020/jekyll-theme-chirpy/blob/master/_posts/2019-08-08-text-and-typography.md?plain=1](https://github.com/cotes2020/jekyll-theme-chirpy/blob/master/_posts/2019-08-08-text-and-typography.md?plain=1)
+    - 매번 이 값을 사람 손으로 넣기 번거로우니 포스트에 넣은 첫 이미지가 자동으로 들어가게 유틸리티에 기능을 넣자.
 - [x] 코코포리아 로그 추출 자동화
 - [ ] 엑스페리온 설정 봇 만들기
 - [ ] TRPG 세션 로그로부터 LLM을 위한 지식 베이스 추출 자동화
