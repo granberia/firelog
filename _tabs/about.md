@@ -16,7 +16,7 @@ order: 1
 
 ## 🏆 달성한 목표들
 
-<details>
+<details markdown="1">
 <summary>달성한 목표들 접기/펴기</summary>
 
 {% include_relative my-past-goals.md %}
@@ -25,7 +25,7 @@ order: 1
 
 ## ✅ 완료된 일과들
 
-<details>
+<details markdown="1">
 <summary>완료된 일과들 접기/펴기</summary>
 
 {% include_relative my-past-routines.md %}
