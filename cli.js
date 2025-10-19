@@ -161,13 +161,39 @@ async function publishDraft() {
     );
     return;
   }
-  const originalContent = fs.readFileSync(sourceMdPath, 'utf-8');
 
-  // 정규식: 상대 경로 이미지 링크 (![...](./...))를 찾아서 변경
-  const imagePathRegex = /!\[(.*?)\]\(\s*(\.\/|\.\.\/)?(.*?)\s*\)/g;
+  // 2. 마크다운 파일 내용 읽고 처리 시작
+  const originalContent = fs.readFileSync(sourceMdPath, 'utf-8');
+  let contentForPublishing = originalContent; // 최종적으로 발행될 내용을 담을 변수
+
   const newCdnPathPrefix = `${URL_IMG_PREFIX}/${dirToPublish}`;
 
-  const newContent = originalContent.replace(
+  // 2a. 첫 번째 이미지를 찾아 헤더(Front Matter)에 추가
+  const firstImageRegex = /!\[(.*?)\]\(\s*(\.\/)?(.*?)\s*\)/; // 'g' 플래그 없이 첫 번째 매칭만 찾음
+  const firstImageMatch = firstImageRegex.exec(originalContent);
+
+  if (firstImageMatch) {
+    const altText = firstImageMatch[1].replace(/"/g, '\\"'); // alt 텍스트에 큰따옴표가 있을 경우 이스케이프
+    const imageFileName = firstImageMatch[3];
+    const headerImagePath = `${newCdnPathPrefix}/${imageFileName}`;
+
+    // Front Matter에 추가할 YAML 블록 생성
+    const imageFrontMatter = `image:\n  path: ${headerImagePath}\n  alt: "${altText}"\n`;
+
+    const contentParts = originalContent.split('---');
+    if (contentParts.length >= 3) {
+      const frontMatter = contentParts[1];
+      const body = contentParts.slice(2).join('---'); // 본문에 '---'가 포함될 경우를 대비
+
+      const newFrontMatter = frontMatter + imageFrontMatter;
+      contentForPublishing = `---${newFrontMatter}---${body}`;
+      console.log('✅ 헤더 이미지를 Front Matter에 추가했습니다.');
+    }
+  }
+
+  // 2b. 본문의 모든 이미지 상대 경로를 최종 URL 경로로 변경
+  const imagePathRegex = /!\[(.*?)\]\(\s*(\.\/|\.\.\/)?(.*?)\s*\)/g; // 'g' 플래그로 모든 이미지 찾음
+  const finalContent = contentForPublishing.replace(
     imagePathRegex,
     `![$1](${newCdnPathPrefix}/$3)`
   );
@@ -179,7 +205,7 @@ async function publishDraft() {
   }
 
   // 4. 경로가 수정된 마크다운 파일을 _posts로 쓰기
-  fs.writeFileSync(destMdPath, newContent);
+  fs.writeFileSync(destMdPath, finalContent);
   console.log(`✅ 마크다운 파일 발행 완료: ${destMdPath}`);
 
   // 5. 이미지 파일들을 cdn/img 폴더로 이동
