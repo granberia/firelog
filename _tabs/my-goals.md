@@ -14,7 +14,7 @@
   - [x] 카테고리별로 글을 볼 수 있는 사이드바 개발
     - 네이버 블로그나 티스토리처럼 카테고리별로 글을 나눠 볼 수 있어야 편할 것 같다. 다른 사람들한테도 이 기능이 필요했던 모양인지 인터넷에 가이드가 있다.
     - [https://yanghs6.github.io/posts/3015_chirpy_custom_sidebar/](https://yanghs6.github.io/posts/3015_chirpy_custom_sidebar/)
-  - [ ] 글 목록에서 첨부된 이미지 미리보기 기능 추가
+  - [x] 글 목록에서 첨부된 이미지 미리보기 기능 추가
     - 포스트에 이미지를 편리하게 넣는 기능을 만들고 테스트해보니 글 목록에 이미지 미리보기 같은 게 있으면 좋겠다는 생각이 들었다. 앞으로 커미션 짤 같은 것도 블로그에 자주 올릴 테니까...
     - Chirpy에서 이 기능을 이미 지원하는데 왜 작동하지 않았지? 원인을 찾아보니 image라는 값을 따로 지정해줘야 했다.
     - [https://github.com/cotes2020/jekyll-theme-chirpy/blob/master/_posts/2019-08-08-text-and-typography.md?plain=1](https://github.com/cotes2020/jekyll-theme-chirpy/blob/master/_posts/2019-08-08-text-and-typography.md?plain=1)
