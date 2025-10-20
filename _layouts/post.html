@@ -141,12 +141,14 @@ script_includes:
     <div id="decrypted-content" style="display: none"></div>
   </div>
 
+  {%- capture encrypted_string -%}{{ content | strip_html | strip }}{%-
+  endcapture -%}
   <script>
     document.addEventListener("DOMContentLoaded", () => {
       if (document.getElementById("decryption-wrapper")) {
         const decryptButton = document.getElementById("decrypt-button");
         const passwordInput = document.getElementById("password-input");
-        const encryptedData = {{ content | strip_html | json }};
+        const encryptedData = {{ encrypted_string | jsonify }};
 
         const decryptAndDisplay = () => {
           const secretKey = passwordInput.value;
