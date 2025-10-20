@@ -4,6 +4,7 @@ import inquirer from 'inquirer';
 import fs from 'fs';
 import path from 'path';
 import simpleGit from 'simple-git';
+import CryptoJS from 'crypto-js';
 
 const DRAFTS_DIR = '_drafts';
 const POSTS_DIR = '_posts';
@@ -11,6 +12,7 @@ const TABS_DIR = '_tabs';
 const CDN_IMG_DIR = path.join('cdn', 'img');
 const URL_IMG_PREFIX = '/img';
 const CONFIG_PATH = 'config.json';
+const PASSWORD_PATH = 'password.json';
 const git = simpleGit();
 
 async function gitConfig() {
@@ -54,12 +56,16 @@ function getFullDateTime() {
 }
 
 async function createDraft() {
-  let config;
+  let config, passwords;
   try {
     config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+    passwords = JSON.parse(fs.readFileSync(PASSWORD_PATH, 'utf-8'));
+    if (!passwords.keys || Object.keys(passwords.keys).length === 0) {
+      throw new Error('password.json에 유효한 키가 없습니다.');
+    }
   } catch (error) {
     console.error(
-      `❌ 설정 파일(${CONFIG_PATH})을 읽을 수 없습니다. 파일이 존재하고 JSON 형식이 올바른지 확인하세요.`
+      `❌ 설정 파일 또는 비밀번호 파일을 읽을 수 없습니다: ${error.message}`
     );
     return;
   }
@@ -84,10 +90,27 @@ async function createDraft() {
       name: 'tags',
       message: '🏷️ 태그를 선택하세요 (스페이스바로 선택, 엔터로 확정):',
       choices: config.tags
+    },
+    {
+      type: 'list',
+      name: 'isEncrypted',
+      message: '🔒 이 포스트를 암호화하시겠습니까?',
+      choices: [
+        { name: '예', value: true },
+        { name: '아니오', value: false }
+      ],
+      default: 1
+    },
+    {
+      type: 'list',
+      name: 'keyId',
+      message: '🔑 사용할 암호화 키를 선택하세요:',
+      choices: Object.keys(passwords.keys),
+      when: (answers) => answers.isEncrypted
     }
   ]);
 
-  const { title, categories, tags } = answers;
+  const { title, categories, tags, isEncrypted, keyId } = answers;
 
   const date = getFormattedDate();
   const slug = slugify(title);
@@ -96,19 +119,20 @@ async function createDraft() {
   const fileName = `${draftDirName}.md`;
   const filePath = path.join(draftDirPath, fileName);
 
-  const fileContent = `---
+  let frontMatter = `---
 title: ${title}
 date: ${getFullDateTime()}
 categories: [${categories.join(', ')}]
 tags: [${tags.join(', ')}]
----
-
 `;
 
-  if (!fs.existsSync(draftDirPath)) {
-    fs.mkdirSync(draftDirPath, { recursive: true });
-    console.log(`📁 초안 폴더를 생성했습니다: ${draftDirPath}`);
+  if (isEncrypted) {
+    frontMatter += `encrypt: true\nkey_id: ${keyId}\n`;
   }
+  const fileContent = `${frontMatter}---\n\n`;
+
+  fs.mkdirSync(draftDirPath, { recursive: true });
+  console.log(`📁 초안 폴더를 생성했습니다: ${draftDirPath}`);
 
   fs.writeFileSync(filePath, fileContent);
   console.log(`✅ 초안 파일이 성공적으로 생성되었습니다: ${filePath}`);
@@ -122,7 +146,7 @@ async function publishDraft() {
     return;
   }
 
-  // 이제 파일이 아닌 폴더를 기준으로 초안 목록을 가져옵니다.
+  // 폴더를 기준으로 초안 목록을 가져옵니다.
   const draftDirs = fs
     .readdirSync(DRAFTS_DIR, { withFileTypes: true })
     .filter((dirent) => dirent.isDirectory())
@@ -150,11 +174,6 @@ async function publishDraft() {
   const destMdPath = path.join(POSTS_DIR, mdFileName);
   const destCdnDir = path.join(CDN_IMG_DIR, dirToPublish);
 
-  // 1. 초안 폴더 내 파일 목록 읽기 (이미지 등)
-  const allFiles = fs.readdirSync(sourceDraftDir);
-  const assetFiles = allFiles.filter((file) => file !== mdFileName);
-
-  // 2. 마크다운 파일 내용 읽기 및 경로 변환
   if (!fs.existsSync(sourceMdPath)) {
     console.error(
       `❌ 오류: 마크다운 파일(${sourceMdPath})을 찾을 수 없습니다.`
@@ -162,70 +181,86 @@ async function publishDraft() {
     return;
   }
 
-  // 2. 마크다운 파일 내용 읽고 처리 시작
-  const originalContent = fs.readFileSync(sourceMdPath, 'utf-8');
-  let contentForPublishing = originalContent; // 최종적으로 발행될 내용을 담을 변수
+  // 포스트 내용 처리
+  let originalContent = fs.readFileSync(sourceMdPath, 'utf-8');
+  let contentForPublishing = originalContent;
 
-  const newCdnPathPrefix = `${URL_IMG_PREFIX}/${dirToPublish}`;
-
-  // 2a. 첫 번째 이미지를 찾아 헤더(Front Matter)에 추가
-  const firstImageRegex = /!\[(.*?)\]\(\s*(\.\/)?(.*?)\s*\)/; // 'g' 플래그 없이 첫 번째 매칭만 찾음
-  const firstImageMatch = firstImageRegex.exec(originalContent);
+  // 1. 헤더 이미지 추가
+  const firstImageRegex = /!\[(.*?)\]\(\s*(\.\/)?(.*?)\s*\)/;
+  const firstImageMatch = firstImageRegex.exec(contentForPublishing);
 
   if (firstImageMatch) {
-    const altText = firstImageMatch[1].replace(/"/g, '\\"'); // alt 텍스트에 큰따옴표가 있을 경우 이스케이프
+    const altText = firstImageMatch[1].replace(/"/g, '\\"');
     const imageFileName = firstImageMatch[3];
-    const headerImagePath = `${newCdnPathPrefix}/${imageFileName}`;
-
-    // Front Matter에 추가할 YAML 블록 생성
+    const headerImagePath = `${URL_IMG_PREFIX}/${dirToPublish}/${imageFileName}`;
     const imageFrontMatter = `image:\n  path: ${headerImagePath}\n  alt: "${altText}"\n`;
 
-    const contentParts = originalContent.split('---');
-    if (contentParts.length >= 3) {
-      const frontMatter = contentParts[1];
-      const body = contentParts.slice(2).join('---'); // 본문에 '---'가 포함될 경우를 대비
+    const parts = contentForPublishing.split('---');
+    contentForPublishing = `---${parts[1]}${imageFrontMatter}---${parts
+      .slice(2)
+      .join('---')}`;
+    console.log('✅ 헤더 이미지를 Front Matter에 추가했습니다.');
+  }
 
-      const newFrontMatter = frontMatter + imageFrontMatter;
-      contentForPublishing = `---${newFrontMatter}---${body}`;
-      console.log('✅ 헤더 이미지를 Front Matter에 추가했습니다.');
+  // 2. 본문 이미지 경로 전체 변환
+  const imagePathRegex = /!\[(.*?)\]\(\s*(\.\/|\.\.\/)?(.*?)\s*\)/g;
+  const newImagePathPrefix = `${URL_IMG_PREFIX}/${dirToPublish}`;
+  contentForPublishing = contentForPublishing.replace(
+    imagePathRegex,
+    `![$1](${newImagePathPrefix}/$3)`
+  );
+  console.log('✅ 본문 이미지 경로를 최종 URL로 변경했습니다.');
+
+  // 3. 암호화 (모든 내용 변경 후 마지막에 수행)
+  let [_, frontMatterString, body] = contentForPublishing.split(/---(.*?)---/s);
+  const isEncrypted = /encrypt:\s*true/.test(frontMatterString);
+
+  if (isEncrypted) {
+    const keyIdMatch = /key_id:\s*(.*)/.exec(frontMatterString);
+    if (keyIdMatch) {
+      const keyId = keyIdMatch[1].trim();
+      try {
+        const passwords = JSON.parse(fs.readFileSync(PASSWORD_PATH, 'utf-8'));
+        const secretKey = passwords.keys[keyId];
+        if (!secretKey) throw new Error(`'${keyId}' 키를 찾을 수 없습니다.`);
+
+        body = CryptoJS.AES.encrypt(body.trim(), secretKey).toString();
+        console.log('🔒 포스트 본문을 성공적으로 암호화했습니다.');
+      } catch (error) {
+        console.error(`❌ 암호화 중 오류 발생: ${error.message}`);
+        return;
+      }
     }
   }
 
-  // 2b. 본문의 모든 이미지 상대 경로를 최종 URL 경로로 변경
-  const imagePathRegex = /!\[(.*?)\]\(\s*(\.\/|\.\.\/)?(.*?)\s*\)/g; // 'g' 플래그로 모든 이미지 찾음
-  const finalContent = contentForPublishing.replace(
-    imagePathRegex,
-    `![$1](${newCdnPathPrefix}/$3)`
-  );
+  const finalContent = `---${frontMatterString}---\n${body}`;
 
-  // 3. 목적지 폴더 생성
+  // 4. 파일 시스템 작업
   if (!fs.existsSync(POSTS_DIR)) fs.mkdirSync(POSTS_DIR);
-  if (assetFiles.length > 0 && !fs.existsSync(destCdnDir)) {
-    fs.mkdirSync(destCdnDir, { recursive: true });
-  }
-
-  // 4. 경로가 수정된 마크다운 파일을 _posts로 쓰기
   fs.writeFileSync(destMdPath, finalContent);
   console.log(`✅ 마크다운 파일 발행 완료: ${destMdPath}`);
 
-  // 5. 이미지 파일들을 cdn/img 폴더로 이동
-  for (const asset of assetFiles) {
-    const sourceAssetPath = path.join(sourceDraftDir, asset);
-    const destAssetPath = path.join(destCdnDir, asset);
-    fs.renameSync(sourceAssetPath, destAssetPath);
-  }
+  const assetFiles = fs
+    .readdirSync(sourceDraftDir)
+    .filter((file) => file !== mdFileName);
   if (assetFiles.length > 0) {
+    if (!fs.existsSync(destCdnDir))
+      fs.mkdirSync(destCdnDir, { recursive: true });
+    for (const asset of assetFiles) {
+      fs.renameSync(
+        path.join(sourceDraftDir, asset),
+        path.join(destCdnDir, asset)
+      );
+    }
     console.log(`🖼️  이미지 파일들을 이동했습니다: ${destCdnDir}`);
   }
 
-  // 6. 작업이 완료된 원본 초안 폴더 삭제
   fs.rmSync(sourceDraftDir, { recursive: true, force: true });
   console.log(`🗑️  원본 초안 폴더를 삭제했습니다: ${sourceDraftDir}`);
 
-  // 7. Git 작업
   try {
     console.log('📦 Git에 변경사항을 커밋하고 푸시합니다...');
-    gitConfig();
+    await gitConfig();
 
     await git.add(destMdPath); // 수정된 마크다운 파일 추가
     if (assetFiles.length > 0) {
@@ -237,25 +272,19 @@ async function publishDraft() {
 
     console.log('🎉 포스트 발행이 성공적으로 완료되었습니다!');
   } catch (error) {
-    console.error(
-      '❌ Git 작업 중 오류가 발생했습니다. Git이 설치되어 있고, 저장소 설정이 올바른지 확인하세요.'
-    );
-    console.error(error.message);
+    console.error('❌ Git 작업 중 오류가 발생했습니다:', error.message);
   }
 }
 
 async function updateTabs() {
   if (!fs.existsSync(TABS_DIR)) {
-    console.log(
-      `🤷 '${TABS_DIR}' 폴더가 존재하지 않습니다. 작업을 진행할 수 없습니다.`
-    );
+    console.log(`🤷 '${TABS_DIR}' 폴더가 존재하지 않습니다.`);
     return;
   }
 
   try {
     console.log(`📦 '${TABS_DIR}' 폴더의 변경사항을 배포합니다...`);
-    gitConfig();
-
+    await gitConfig();
     console.log(`  -> git add ${TABS_DIR}`);
     await git.add(TABS_DIR);
 
@@ -267,13 +296,10 @@ async function updateTabs() {
 
     console.log(`🎉 '${TABS_DIR}' 폴더 배포가 성공적으로 완료되었습니다!`);
   } catch (error) {
-    if (error.stdout.toString().includes('nothing to commit')) {
-      console.log('🤷 커밋할 변경사항이 없습니다. 작업을 종료합니다.');
+    if (error.message.includes('nothing to commit')) {
+      console.log('🤷 커밋할 변경사항이 없습니다.');
     } else {
-      console.error(
-        '❌ Git 작업 중 오류가 발생했습니다. Git 상태를 확인해주세요.'
-      );
-      console.error(error.message);
+      console.error('❌ Git 작업 중 오류가 발생했습니다:', error.message);
     }
   }
 }

@@ -76,6 +76,131 @@ script_includes:
     </div>
   </header>
 
+  {% comment %} ----- 암호화된 포스트----- {% endcomment %} {% if page.encrypt
+  %} {% if enable_toc %}
+  <div
+    id="toc-bar"
+    class="d-flex align-items-center justify-content-between invisible"
+  >
+    <span class="label text-truncate">{{ page.title }}</span>
+    <button type="button" class="toc-trigger btn me-1">
+      <i class="fa-solid fa-list-ul fa-fw"></i>
+    </button>
+  </div>
+  <button
+    id="toc-solo-trigger"
+    type="button"
+    class="toc-trigger btn btn-outline-secondary btn-sm"
+  >
+    <span class="label ps-2 pe-1"
+      >{{- site.data.locales[lang].panel.toc -}}</span
+    >
+    <i class="fa-solid fa-angle-right fa-fw"></i>
+  </button>
+  <dialog id="toc-popup" class="p-0">
+    <div
+      class="header d-flex flex-row align-items-center justify-content-between"
+    >
+      <div class="label text-truncate py-2 ms-4">{{- page.title -}}</div>
+      <button
+        id="toc-popup-close"
+        type="button"
+        class="btn mx-1 my-1 opacity-75"
+      >
+        <i class="fas fa-close"></i>
+      </button>
+    </div>
+    <div id="toc-popup-content" class="px-4 py-3 pb-4"></div>
+  </dialog>
+  {% endif %}
+
+  <!-- 본문 영역을 복호화 UI로 교체 -->
+  <div class="content">
+    <div id="decryption-wrapper" class="text-center p-4 border rounded">
+      <i class="fa-solid fa-lock fa-2x mb-3"></i>
+      <p class="mb-3">
+        이 포스트는 암호화되어 있습니다. 내용을 보려면 비밀번호를 입력하세요.
+      </p>
+      <div class="input-group mb-3 mx-auto" style="max-width: 300px">
+        <input
+          type="password"
+          id="password-input"
+          class="form-control"
+          placeholder="비밀번호"
+          aria-label="Password"
+        />
+        <button id="decrypt-button" class="btn btn-primary" type="button">
+          확인
+        </button>
+      </div>
+      <p id="error-message" class="text-danger small" style="display: none">
+        비밀번호가 올바르지 않습니다.
+      </p>
+    </div>
+    <!-- 암호화된 본문을 Javascript에서 사용할 수 있도록 숨겨둡니다. -->
+    <div id="encrypted-data" style="display: none">{{ content }}</div>
+    <!-- 복호화된 내용이 여기에 삽입됩니다. -->
+    <div id="decrypted-content" style="display: none"></div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      if (document.getElementById("decryption-wrapper")) {
+        const decryptButton = document.getElementById("decrypt-button");
+        const passwordInput = document.getElementById("password-input");
+        const encryptedData = document
+          .getElementById("encrypted-data")
+          .innerHTML.trim();
+
+        const decryptAndDisplay = () => {
+          const secretKey = passwordInput.value;
+          const errorMessage = document.getElementById("error-message");
+
+          if (!secretKey) return;
+
+          try {
+            const decryptedBytes = CryptoJS.AES.decrypt(
+              encryptedData,
+              secretKey
+            );
+            const decryptedText = decryptedBytes.toString(CryptoJS.enc.Utf8);
+
+            if (decryptedText) {
+              const decryptedContent =
+                document.getElementById("decrypted-content");
+              decryptedContent.innerHTML = decryptedText;
+
+              document.getElementById("decryption-wrapper").style.display =
+                "none";
+              decryptedContent.style.display = "block";
+
+              // Chirpy 테마의 TOC(Table of Contents) 스크립트를 수동으로 다시 초기화
+              if (typeof window.toc !== "undefined") {
+                window.toc.init();
+              }
+            } else {
+              throw new Error("Decryption resulted in empty content.");
+            }
+          } catch (e) {
+            errorMessage.style.display = "block";
+            passwordInput.focus();
+            console.error("Decryption failed:", e);
+          }
+        };
+
+        decryptButton.addEventListener("click", decryptAndDisplay);
+        passwordInput.addEventListener("keyup", (event) => {
+          if (event.key === "Enter") {
+            decryptButton.click();
+          }
+        });
+      }
+    });
+  </script>
+
+  {% else %}
+  <!-- [일반 포스트] -->
+
   {% if enable_toc %}
   <div
     id="toc-bar"
