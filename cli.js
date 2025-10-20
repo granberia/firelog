@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import simpleGit from 'simple-git';
 import CryptoJS from 'crypto-js';
+import { marked } from 'marked';
 
 const DRAFTS_DIR = '_drafts';
 const POSTS_DIR = '_posts';
@@ -224,7 +225,9 @@ async function publishDraft() {
         const secretKey = passwords.keys[keyId];
         if (!secretKey) throw new Error(`'${keyId}' 키를 찾을 수 없습니다.`);
 
-        body = CryptoJS.AES.encrypt(body.trim(), secretKey).toString();
+        const bodyAsHtml = marked.parse(body.trim());
+
+        body = CryptoJS.AES.encrypt(bodyAsHtml, secretKey).toString();
         console.log('🔒 포스트 본문을 성공적으로 암호화했습니다.');
       } catch (error) {
         console.error(`❌ 암호화 중 오류 발생: ${error.message}`);
