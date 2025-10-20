@@ -184,11 +184,22 @@ async function publishDraft() {
 
   // 포스트 내용 처리
   let originalContent = fs.readFileSync(sourceMdPath, 'utf-8');
-  let contentForPublishing = originalContent;
+  const frontMatterRegex = /^---(.*?)---/s;
+  const match = originalContent.match(frontMatterRegex);
+
+  if (!match) {
+    console.error(
+      '❌ Front Matter를 찾을 수 없습니다. 포스트 형식을 확인해주세요.'
+    );
+    return;
+  }
+
+  let frontMatterString = match[1]; // ---를 제외한 순수 Front Matter 내용
+  let body = originalContent.substring(match[0].length); // Front Matter 전체 길이 이후의 모든 내용
 
   // 1. 헤더 이미지 추가
   const firstImageRegex = /!\[(.*?)\]\(\s*(\.\/)?(.*?)\s*\)/;
-  const firstImageMatch = firstImageRegex.exec(contentForPublishing);
+  const firstImageMatch = firstImageRegex.exec(body);
 
   if (firstImageMatch) {
     const altText = firstImageMatch[1].replace(/"/g, '\\"');
@@ -196,24 +207,17 @@ async function publishDraft() {
     const headerImagePath = `${URL_IMG_PREFIX}/${dirToPublish}/${imageFileName}`;
     const imageFrontMatter = `image:\n  path: ${headerImagePath}\n  alt: "${altText}"\n`;
 
-    const parts = contentForPublishing.split('---');
-    contentForPublishing = `---${parts[1]}${imageFrontMatter}---${parts
-      .slice(2)
-      .join('---')}`;
+    frontMatterString += imageFrontMatter;
     console.log('✅ 헤더 이미지를 Front Matter에 추가했습니다.');
   }
 
   // 2. 본문 이미지 경로 전체 변환
   const imagePathRegex = /!\[(.*?)\]\(\s*(\.\/|\.\.\/)?(.*?)\s*\)/g;
   const newImagePathPrefix = `${URL_IMG_PREFIX}/${dirToPublish}`;
-  contentForPublishing = contentForPublishing.replace(
-    imagePathRegex,
-    `![$1](${newImagePathPrefix}/$3)`
-  );
+  body = body.replace(imagePathRegex, `![$1](${newImagePathPrefix}/$3)`); // body의 경로를 변환합니다.
   console.log('✅ 본문 이미지 경로를 최종 URL로 변경했습니다.');
 
   // 3. 암호화 (모든 내용 변경 후 마지막에 수행)
-  let [, frontMatterString, body] = contentForPublishing.split(/---(.*?)---/s);
   const isEncrypted = /encrypt:\s*true/.test(frontMatterString);
 
   if (isEncrypted) {
