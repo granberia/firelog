@@ -137,8 +137,6 @@ script_includes:
         비밀번호가 올바르지 않습니다.
       </p>
     </div>
-    <!-- 암호화된 본문을 Javascript에서 사용할 수 있도록 숨겨둡니다. -->
-    <div id="encrypted-data" style="display: none"></div>
     <!-- 복호화된 내용이 여기에 삽입됩니다. -->
     <div id="decrypted-content" style="display: none"></div>
   </div>
@@ -148,7 +146,7 @@ script_includes:
       if (document.getElementById("decryption-wrapper")) {
         const decryptButton = document.getElementById("decrypt-button");
         const passwordInput = document.getElementById("password-input");
-        const encryptedData = {{ content | json }};
+        const encryptedData = {{ content | strip_html | json }};
 
         const decryptAndDisplay = () => {
           const secretKey = passwordInput.value;
