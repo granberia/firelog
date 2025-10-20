@@ -76,8 +76,8 @@ script_includes:
     </div>
   </header>
 
-  {% comment %} ----- 암호화된 포스트----- {% endcomment %} {% if page.encrypt
-  %} {% if enable_toc %}
+  <!-- 암호화된 포스트 -->
+  {% if page.encrypt%} {% if enable_toc %}
   <div
     id="toc-bar"
     class="d-flex align-items-center justify-content-between invisible"
@@ -199,7 +199,7 @@ script_includes:
   </script>
 
   {% else %}
-  <!-- [일반 포스트] -->
+  <!-- 일반 포스트 -->
 
   {% if enable_toc %}
   <div
@@ -241,6 +241,7 @@ script_includes:
   {% endif %}
 
   <div class="content">{{ content }}</div>
+  {% endif %}
 
   <div class="post-tail-wrapper text-muted">
     <!-- categories -->

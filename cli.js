@@ -212,7 +212,7 @@ async function publishDraft() {
   console.log('✅ 본문 이미지 경로를 최종 URL로 변경했습니다.');
 
   // 3. 암호화 (모든 내용 변경 후 마지막에 수행)
-  let [_, frontMatterString, body] = contentForPublishing.split(/---(.*?)---/s);
+  let [, frontMatterString, body] = contentForPublishing.split(/---(.*?)---/s);
   const isEncrypted = /encrypt:\s*true/.test(frontMatterString);
 
   if (isEncrypted) {
@@ -267,7 +267,7 @@ async function publishDraft() {
       await git.add(destCdnDir); // 이미지 폴더 추가
     }
 
-    await git.commit(`feat: publish new post - ${dirToPublish}`);
+    await git.commit(`chore: ${dirToPublish}`);
     await git.push();
 
     console.log('🎉 포스트 발행이 성공적으로 완료되었습니다!');
